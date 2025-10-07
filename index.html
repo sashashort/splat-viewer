@@ -3,24 +3,40 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>html,body{margin:0;height:100%} pc-app{display:block;height:100vh}</style>
+  <title>Splat Viewer</title>
+  <style>
+    html, body { height:100%; margin:0; }
+    pc-app { display:block; height:100vh; background:#111; } /* visible background */
+    #hint { position:fixed; top:8px; left:12px; color:#bbb; font:14px/1.4 system-ui; }
+  </style>
 
+  <!-- Import map for the PlayCanvas engine -->
   <script type="importmap">
-  { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@1.68.1/build/playcanvas.mjs" } }
+  {
+    "imports": {
+      "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas/build/playcanvas.mjs"
+    }
+  }
   </script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components@0.5.2/dist/pwc.mjs"></script>
+  <!-- PlayCanvas Web Components -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components/dist/pwc.mjs"></script>
 </head>
 <body>
-  <pc-app antialias="false" high-resolution="false">
-    <pc-asset id="camCtl" src="https://cdn.jsdelivr.net/npm/playcanvas@1.68.1/scripts/esm/camera-controls.mjs" preload></pc-asset>
+  <div id="hint">Loading… (if it stays blank, press F12 → Console for errors)</div>
 
-    <!-- your raw .sog file hosted on GitHub -->
+  <pc-app antialias="false" high-resolution="false">
+    <!-- Orbit / pan / zoom helper -->
+    <pc-asset id="camCtl" src="https://cdn.jsdelivr.net/npm/playcanvas/scripts/esm/camera-controls.mjs" preload></pc-asset>
+
+    <!-- Load the SOG from the same origin (repo root) -->
     <pc-asset id="dish" src="./export_ply.sog" preload></pc-asset>
 
     <pc-scene>
       <pc-entity name="camera" position="0 0 2.5">
         <pc-camera></pc-camera>
-        <pc-scripts><pc-script name="cameraControls"></pc-script></pc-scripts>
+        <pc-scripts>
+          <pc-script name="cameraControls"></pc-script>
+        </pc-scripts>
       </pc-entity>
 
       <pc-entity name="dish" position="0 -0.7 0" rotation="0 0 180">
@@ -28,5 +44,14 @@
       </pc-entity>
     </pc-scene>
   </pc-app>
+
+  <!-- Tiny helper to show any loading errors on-screen -->
+  <script>
+    window.addEventListener('error', e => {
+      const el = document.getElementById('hint');
+      el.style.color = '#f66';
+      el.textContent = 'Error: ' + (e.message || e.filename || e.type);
+    });
+  </script>
 </body>
 </html>
