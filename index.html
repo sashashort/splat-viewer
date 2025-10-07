@@ -3,162 +3,107 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Splat Viewer (Plates)</title>
+  <title>Plate Viewer (3DGS)</title>
   <style>
     html, body { margin:0; height:100%; }
+    pc-app { display:block; height:100vh; background:#e9ecef; } /* neutral gray bg */
     #ui {
-      position: fixed; inset: 12px auto auto 12px; z-index: 10;
-      background: rgba(20,20,20,.7); color:#eee; padding:10px 12px; border-radius:10px;
-      font: 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+      position: fixed; top:12px; left:12px; z-index: 10;
+      background: rgba(20,20,20,.75); color:#fff; padding:8px 10px; border-radius:10px;
+      font: 14px/1 system-ui; display:flex; gap:8px; align-items:center;
     }
-    #ui button, #ui select {
-      border:1px solid #555; background:#222; color:#eee; border-radius:8px; padding:6px 10px; cursor:pointer;
+    #ui button {
+      border:1px solid #555; background:#222; color:#fff; border-radius:8px;
+      padding:6px 10px; cursor:pointer;
     }
     #ui button:hover { background:#2a2a2a; }
-    pc-app { display:block; height:100vh; background:#222; } /* viewer bg */
+    #hint { opacity:.8 }
   </style>
 
-  <!-- Import the PlayCanvas engine & web components -->
+  <!-- PlayCanvas imports -->
   <script type="importmap">
-  { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas/build/playcanvas.mjs" } }
+    { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas/build/playcanvas.mjs" } }
   </script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components/dist/pwc.mjs"></script>
 </head>
 <body>
-  <!-- Simple control bar -->
+  <!-- Minimal UI -->
   <div id="ui">
-    <button id="fit">Fit</button>
-    <button id="top">Top</button>
-    <button id="front">Front</button>
-    <button id="angle">45°</button>
-    <label>BG
-      <select id="bg">
-        <option value="#222">Dark</option>
-        <option value="#000">Black</option>
-        <option value="#ffffff">White</option>
-        <option value="#e0e0e0">Light Gray</option>
-        <option value="#f5efe0">Warm</option>
-      </select>
-    </label>
-    <button id="reset">Reset</button>
-    <span id="hint" style="opacity:.7;padding-left:6px">Loaded</span>
+    <button id="viewTop">Top</button>
+    <button id="view65">Front 65°</button>
+    <span id="hint">Auto-rotating…</span>
   </div>
 
-  <!-- PlayCanvas app (NO auto camera script) -->
+  <!-- App with NO camera-controls (so: no zoom, no drag) -->
   <pc-app id="pcapp" antialias="false" high-resolution="false">
-    <!-- Your splat, served from same origin -->
     <pc-asset id="dish" src="./export_ply.sog" preload></pc-asset>
 
     <pc-scene>
-      <!-- Camera WITHOUT cameraControls -->
-      <pc-entity name="camera" position="0 0 2.2">
+      <!-- Fixed camera; we will just reposition it via script for presets -->
+      <pc-entity name="camera" position="0 0 2.0">
         <pc-camera></pc-camera>
       </pc-entity>
 
-      <!-- Splat entity at origin; rotate 180° only if needed -->
-      <pc-entity name="dish" position="0 0 0" rotation="0 0 0">
+      <!-- Plate (splat) at origin -->
+      <pc-entity name="plate" position="0 0 0" rotation="0 0 0">
         <pc-splat asset="dish"></pc-splat>
       </pc-entity>
     </pc-scene>
   </pc-app>
 
   <script type="module">
-    // Wait for the web component to boot the engine
     const appEl = document.getElementById('pcapp');
-    const hint = document.getElementById('hint');
+    const hint  = document.getElementById('hint');
 
-    // Helpers
-    function setBg(color) { appEl.style.background = color; }
-
-    function lookAtTarget(camEntity, target=[0,0,0]) {
-      const app = appEl.app;
-      const t = new app.graphicsDevice.constructor.prototype.constructor.Vec3(...target);
-      camEntity.lookAt(t);
+    // Utility to set a camera preset and look at origin
+    function setCamera(app, pos) {
+      const cam = app.root.findByName('camera');
+      cam.setLocalPosition(pos[0], pos[1], pos[2]);
+      cam.lookAt(new app.math.Vec3(0,0,0));
     }
 
-    function setCam(camEntity, pos, target=[0,0,0]) {
-      camEntity.setLocalPosition(pos[0], pos[1], pos[2]);
-      lookAtTarget(camEntity, target);
+    // Tilt plate to look like a product shot at ~65° (X rotation)
+    function setPlateTilt(app, deg) {
+      const plate = app.root.findByName('plate');
+      // Positive X tilt tips the plate "back"; if you see it upside down, change the sign.
+      plate.setLocalEulerAngles(deg, 0, 0);
     }
 
-    function fitToPlate(camEntity) {
-      // Heuristic for plates: camera distance ~ radius * factor, height slightly above
-      // If your captures keep similar scale, tweak FACTOR once and you're done.
-      const FACTOR = 2.2; // farther = larger value; closer = smaller
-      const radius = 1.0; // assume unit-ish splat; adjust per your dataset if needed
-      const dist = radius * FACTOR;
-      setCam(camEntity, [0, 0.35, dist], [0, 0, 0]);
+    // Auto-rotate plate around Y (not the camera)
+    function enableAutoRotate(app, speedDegPerSec=15) {
+      const plate = app.root.findByName('plate');
+      let yaw = 0;
+      app.on('update', dt => {
+        yaw = (yaw + speedDegPerSec * dt) % 360;
+        const e = plate.getLocalEulerAngles();
+        plate.setLocalEulerAngles(e.x, yaw, e.z);
+      });
     }
 
-    function presetTop(camEntity)   { setCam(camEntity, [0, 2.0, 0.001], [0,0,0]); }  // tiny z to avoid lookAt singularity
-    function presetFront(camEntity) { setCam(camEntity, [0, 0.3, 2.0], [0,0,0]); }
-    function preset45(camEntity)    { setCam(camEntity, [1.4, 0.8, 1.4], [0,0,0]); }
-
-    // When the app is ready, wire up buttons
+    // When engine is ready, set everything up
     appEl.addEventListener('loaded', () => {
       const app = appEl.app;
-      const camera = app.root.findByName('camera');
 
-      // Initial pose
-      fitToPlate(camera);
+      // Start at the FRONT 65° view: camera slightly above, looking at origin
+      setCamera(app, [0, 0.6, 2.0]);       // z controls distance; y a tiny lift
+      setPlateTilt(app, -65);              // try -65 first; if upside down, change to +65
 
-      // UI hooks
-      document.getElementById('fit').onclick   = () => fitToPlate(camera);
-      document.getElementById('top').onclick   = () => presetTop(camera);
-      document.getElementById('front').onclick = () => presetFront(camera);
-      document.getElementById('angle').onclick = () => preset45(camera);
-      document.getElementById('reset').onclick = () => { setBg('#222'); fitToPlate(camera); };
+      // Auto-rotate plate (slow, showroom vibe)
+      enableAutoRotate(app, 12);
 
-      document.getElementById('bg').onchange = (e) => setBg(e.target.value);
+      // Buttons: Top vs Front-65
+      document.getElementById('viewTop').onclick = () => {
+        // Camera straight above; tiny z to avoid singularity
+        setCamera(app, [0, 2.0, 0.001]);
+        setPlateTilt(app, -90); // plate perfectly flat for top view
+      };
+      document.getElementById('view65').onclick = () => {
+        setCamera(app, [0, 0.6, 2.0]);
+        setPlateTilt(app, -65);
+      };
 
       hint.textContent = 'Ready';
     });
-
-    // Basic wheel zoom & drag rotate (minimal, no inertia)
-    // Left-drag = rotate, Wheel = zoom, Right-drag = pan (optional)
-    let dragging = false, lastX=0, lastY=0, yaw=0, pitch=0, dist=2.2, target=[0,0,0];
-    function applyCam() {
-      const app = appEl.app; if (!app) return;
-      const cam = app.root.findByName('camera'); if (!cam) return;
-      // Spherical to Cartesian around target
-      const radYaw = yaw * Math.PI/180, radPitch = pitch * Math.PI/180;
-      const x = target[0] + dist * Math.sin(radYaw) * Math.cos(radPitch);
-      const y = target[1] + dist * Math.sin(radPitch);
-      const z = target[2] + dist * Math.cos(radYaw) * Math.cos(radPitch);
-      cam.setLocalPosition(x,y,z);
-      cam.lookAt(new app.math.Vec3(target[0],target[1],target[2]));
-    }
-    // Initialize defaults
-    appEl.addEventListener('loaded', () => { yaw = 0; pitch = -10; dist = 2.2; applyCam(); });
-
-    // Pointer handlers on the pc-app element
-    appEl.addEventListener('pointerdown', (e)=>{ dragging = true; lastX=e.clientX; lastY=e.clientY; appEl.setPointerCapture(e.pointerId); });
-    appEl.addEventListener('pointerup',   (e)=>{ dragging = false; appEl.releasePointerCapture?.(e.pointerId); });
-    appEl.addEventListener('pointermove', (e)=>{
-      if (!dragging) return;
-      const dx = e.clientX - lastX, dy = e.clientY - lastY;
-      lastX = e.clientX; lastY = e.clientY;
-      // Rotate around target (left button)
-      if (e.buttons & 1) {
-        yaw   = (yaw   + dx * 0.25) % 360;
-        pitch = Math.max(-85, Math.min(85, pitch - dy * 0.25));
-        applyCam();
-      }
-      // Pan with right button (optional)
-      if (e.buttons & 2) {
-        const panScale = dist * 0.0015;
-        target[0] -= dx * panScale;
-        target[1] += dy * panScale;
-        applyCam();
-      }
-    });
-    appEl.addEventListener('wheel', (e)=>{
-      e.preventDefault();
-      const s = Math.exp(-e.deltaY * 0.0015);
-      dist = Math.max(0.25, Math.min(10, dist * s)); // clamp zoom
-      applyCam();
-    }, { passive:false });
   </script>
 </body>
 </html>
