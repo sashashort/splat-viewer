@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>html,body{margin:0;height:100%} pc-app{display:block;height:100vh}</style>
+
+  <script type="importmap">
+  { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@1.68.1/build/playcanvas.mjs" } }
+  </script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components@0.5.2/dist/pwc.mjs"></script>
+</head>
+<body>
+  <pc-app antialias="false" high-resolution="false">
+    <pc-asset id="camCtl" src="https://cdn.jsdelivr.net/npm/playcanvas@1.68.1/scripts/esm/camera-controls.mjs" preload></pc-asset>
+
+    <!-- your raw .sog file hosted on GitHub -->
+    <pc-asset id="dish" src="https://raw.githubusercontent.com/sashashort/splat-viewer/main/export_ply.sog" preload></pc-asset>
+
+    <pc-scene>
+      <pc-entity name="camera" position="0 0 2.5">
+        <pc-camera></pc-camera>
+        <pc-scripts><pc-script name="cameraControls"></pc-script></pc-scripts>
+      </pc-entity>
+
+      <pc-entity name="dish" position="0 -0.7 0" rotation="0 0 180">
+        <pc-splat asset="dish"></pc-splat>
+      </pc-entity>
+    </pc-scene>
+  </pc-app>
+</body>
+</html>
