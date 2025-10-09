@@ -19,11 +19,11 @@
 <div style="color:#9be39b;padding:8px 12px;font:14px system-ui">Build v2</div>
   <pc-app id="pcapp" antialias="false" high-resolution="false">
     <!-- IMPORTANT: this filename must match your file in the repo root -->
-    <pc-asset id="dish" src="./export_ply.sog" preload></pc-asset>
+    <pc-asset id="dish" src="./export_ply.sog?v=6" preload></pc-asset>
 
     <pc-scene>
-      <pc-entity name="camera" position="0 2.3 1.0">
-        <pc-camera near-clip="0.001" far-clip="2000" fov="40" clear-color="#111111"></pc-camera>
+      <pc-entity name="camera" position="0 0 4">
+        <pc-camera near-clip="0.001" far-clip="2000" clear-color="#111111"></pc-camera>
       </pc-entity>
 
       <pc-entity name="plate" position="0 0 0" rotation="180 0 0">
