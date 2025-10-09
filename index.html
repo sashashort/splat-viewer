@@ -3,48 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Plate Viewer (3DGS)</title>
+  <title>3DGS Plate — Static</title>
   <style>
-    html, body { margin:0; height:100%; }
-    pc-app { display:block; height:100vh; background:#e9ecef; } /* neutral gray bg */
-    #ui {
-      position: fixed; top:12px; left:12px; z-index: 10;
-      background: rgba(20,20,20,.75); color:#fff; padding:8px 10px; border-radius:10px;
-      font: 14px/1 system-ui; display:flex; gap:8px; align-items:center;
-    }
-    #ui button {
-      border:1px solid #555; background:#222; color:#fff; border-radius:8px;
-      padding:6px 10px; cursor:pointer;
-    }
-    #ui button:hover { background:#2a2a2a; }
-    #hint { opacity:.8 }
+    html, body { margin:0; height:100%; background:#000; }
+    pc-app { display:block; height:50vh; background:#111; }
   </style>
 
-  <!-- PlayCanvas imports -->
   <script type="importmap">
     { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas/build/playcanvas.mjs" } }
   </script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components/dist/pwc.mjs"></script>
 </head>
 <body>
-  <!-- Minimal UI -->
-  <div id="ui">
-    <button id="viewTop">Top</button>
-    <button id="view65">Front 65°</button>
-    <span id="hint">Auto-rotating…</span>
-  </div>
-
-  <!-- App with NO camera-controls (so: no zoom, no drag) -->
   <pc-app id="pcapp" antialias="false" high-resolution="false">
+    <!-- IMPORTANT: this filename must match your file in the repo root -->
     <pc-asset id="dish" src="./export_ply.sog" preload></pc-asset>
 
     <pc-scene>
-      <!-- Fixed camera; we will just reposition it via script for presets -->
-      <pc-entity name="camera" position="0 0 2.0">
-        <pc-camera></pc-camera>
+      <pc-entity name="camera" position="0 0 4">
+        <pc-camera near-clip="0.001" far-clip="2000"></pc-camera>
       </pc-entity>
 
-      <!-- Plate (splat) at origin -->
       <pc-entity name="plate" position="0 0 0" rotation="0 0 0">
         <pc-splat asset="dish"></pc-splat>
       </pc-entity>
@@ -53,56 +32,9 @@
 
   <script type="module">
     const appEl = document.getElementById('pcapp');
-    const hint  = document.getElementById('hint');
-
-    // Utility to set a camera preset and look at origin
-    function setCamera(app, pos) {
-      const cam = app.root.findByName('camera');
-      cam.setLocalPosition(pos[0], pos[1], pos[2]);
-      cam.lookAt(new app.math.Vec3(0,0,0));
-    }
-
-    // Tilt plate to look like a product shot at ~65° (X rotation)
-    function setPlateTilt(app, deg) {
-      const plate = app.root.findByName('plate');
-      // Positive X tilt tips the plate "back"; if you see it upside down, change the sign.
-      plate.setLocalEulerAngles(deg, 0, 0);
-    }
-
-    // Auto-rotate plate around Y (not the camera)
-    function enableAutoRotate(app, speedDegPerSec=15) {
-      const plate = app.root.findByName('plate');
-      let yaw = 0;
-      app.on('update', dt => {
-        yaw = (yaw + speedDegPerSec * dt) % 360;
-        const e = plate.getLocalEulerAngles();
-        plate.setLocalEulerAngles(e.x, yaw, e.z);
-      });
-    }
-
-    // When engine is ready, set everything up
     appEl.addEventListener('loaded', () => {
       const app = appEl.app;
-
-      // Start at the FRONT 65° view: camera slightly above, looking at origin
-      setCamera(app, [0, 0.6, 2.0]);       // z controls distance; y a tiny lift
-      setPlateTilt(app, -65);              // try -65 first; if upside down, change to +65
-
-      // Auto-rotate plate (slow, showroom vibe)
-      enableAutoRotate(app, 12);
-
-      // Buttons: Top vs Front-65
-      document.getElementById('viewTop').onclick = () => {
-        // Camera straight above; tiny z to avoid singularity
-        setCamera(app, [0, 2.0, 0.001]);
-        setPlateTilt(app, -90); // plate perfectly flat for top view
-      };
-      document.getElementById('view65').onclick = () => {
-        setCamera(app, [0, 0.6, 2.0]);
-        setPlateTilt(app, -65);
-      };
-
-      hint.textContent = 'Ready';
+      app.root.findByName('camera').lookAt(new app.math.Vec3(0,0,0));
     });
   </script>
 </body>
