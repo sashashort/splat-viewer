@@ -1,46 +1,55 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>3DGS Plate — RESET v13</title>
-  <style>
-    html, body { margin:0; height:100%; background:#000; }
-    pc-app { display:block; height:50vh; background:#111; }
-    #tag { color:#9be39b; padding:8px 12px; font:14px system-ui,-apple-system,Segoe UI,Roboto,Arial; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Splat Plate — Viewer</title>
 
+  <!-- PlayCanvas web components -->
   <script type="importmap">
-    { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas/build/playcanvas.mjs" } }
+  { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs" } }
   </script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components/dist/pwc.mjs"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components@latest/dist/pwc.mjs"></script>
+
+  <style>
+    html, body { margin:0; height:100%; overflow:hidden; background:#0b0b0b; }
+    * { box-sizing: border-box; }
+    .wrap { position:fixed; inset:0; }
+    pc-app { position:absolute; inset:0; display:block; touch-action:none; user-select:none; }
+  </style>
 </head>
 <body>
-  <div id="tag">RESET v13</div>
+  <div class="wrap">
+    <!-- lighter = smoother -->
+    <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
+      <!-- Assets (load your splat from THIS repo) -->
+      <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
+      <pc-asset id="cameraControls"
+        src="https://cdn.jsdelivr.net/npm/playcanvas@latest/scripts/esm/camera-controls.mjs"></pc-asset>
 
-  <pc-app id="pcapp" antialias="false" high-resolution="false">
-    <!-- IMPORTANT: filename must match exactly (case-sensitive) and be in the repo root -->
-    <pc-asset id="dish" src="./export_ply.sog" preload></pc-asset>
+      <!-- Scene -->
+      <pc-scene>
+        <pc-entity id="camRig" position="0 0 0" rotation="-28 16 0">
+          <pc-entity id="camera" position="0 0 2.3">
+            <pc-camera clear-color="#0b0b0b" fov="40"></pc-camera>
+            <pc-scripts>
+              <pc-script name="cameraControls" attributes='{
+                "enableFly": false,
+                "enablePan": false,
+                "focusPoint": "vec3:0,0,0",
+                "pitchRange": "vec2:-80,-10",
+                "sceneSize": 3,
+                "zoomRange": "vec2:1.6,3.2"
+              }'></pc-script>
+            </pc-scripts>
+          </pc-entity>
+        </pc-entity>
 
-    <pc-scene>
-      <!-- Known-good camera -->
-      <pc-entity name="camera" position="0 1.7 1.2">
-        <pc-camera near-clip="0.001" far-clip="2000" clear-color="#111111"></pc-camera>
-      </pc-entity>
-
-      <!-- Plate at origin, no flip -->
-      <pc-entity name="plate" position="0 0 0" rotation="180 0 0">
-        <pc-splat asset="dish"></pc-splat>
-      </pc-entity>
-    </pc-scene>
-  </pc-app>
-
-  <script type="module">
-    const appEl = document.getElementById('pcapp');
-    appEl.addEventListener('loaded', () => {
-      const app = appEl.app;
-      app.root.findByName('camera').lookAt(new app.math.Vec3(0,0,0));
-    });
-  </script>
+        <pc-entity id="splat" position="0 0 0" rotation="180 0 0" scale="2.8 2.8 2.8">
+          <pc-splat asset="plate"></pc-splat>
+        </pc-entity>
+      </pc-scene>
+    </pc-app>
+  </div>
 </body>
 </html>
