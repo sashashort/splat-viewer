@@ -51,5 +51,23 @@
       </pc-scene>
     </pc-app>
   </div>
+  <script type="module">
+    import * as pc from "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs";
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const appEl = document.querySelector("pc-app");
+
+      // Wait until PlayCanvas app is ready
+      appEl.addEventListener("pcstart", (e) => {
+        const app = e.detail.app;
+        const cameraEntity = app.root.findByName("camera");
+
+        // Disable panning so the plate stays centered
+        if (cameraEntity?.script?.cameraControls) {
+          cameraEntity.script.cameraControls.enablePan = false;
+        }
+      });
+    });
+  </script>
 </body>
 </html>
