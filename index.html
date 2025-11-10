@@ -53,20 +53,29 @@
 
   <!-- Disable two-finger panning on mobile -->
   <script type="module">
-    import * as pc from "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs";
+  import * as pc from "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs";
 
-    window.addEventListener("pcstart", e => {
-      const app = e.detail.app;
+  window.addEventListener("pcstart", e => {
+    const app = e.detail.app;
+    const camera = app.root.findByName("camera");
 
-      // Only apply on touch devices
-      if ('ontouchstart' in window) {
-        app.touch.on(pc.EVENT_TOUCHMOVE, evt => {
-          if (evt.touches.length === 2) {
-            evt.event.preventDefault(); // block drag/pan
+    app.on("update", () => {
+      const ctrl = camera?.script?.cameraControls;
+      if (ctrl && ctrl._orbitCameraInputTouch) {
+        // freeze pan deltas so two-finger drag does nothing
+        ctrl._orbitCameraInputTouch.onTouchMove = function (event) {
+          if (event.touches.length === 2) {
+            // ignore pan movement, only allow pinch zoom
+            const t0 = event.touches[0];
+            const t1 = event.touches[1];
+            const dx = t1.x - t0.x;
+            const dy = t1.y - t0.y;
+            this._lastPinchDist = Math.hypot(dx, dy);
           }
-        });
+        };
       }
     });
-  </script>
+  });
+</script>
 </body>
 </html>
