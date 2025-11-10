@@ -52,27 +52,25 @@
   </div>
 
   <!-- Disable two-finger panning on mobile -->
-  <script type="module">
+ <script type="module">
   import * as pc from "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs";
 
   window.addEventListener("pcstart", e => {
     const app = e.detail.app;
-    const camera = app.root.findByName("camera");
+    const cam = app.root.findByName("camera");
+
+    if (!cam) return;
+
+    // remember initial pivot and position
+    const basePivot = new pc.Vec3(0, 0, 0);
+    const basePos   = cam.getLocalPosition().clone();
 
     app.on("update", () => {
-      const ctrl = camera?.script?.cameraControls;
-      if (ctrl && ctrl._orbitCameraInputTouch) {
-        // freeze pan deltas so two-finger drag does nothing
-        ctrl._orbitCameraInputTouch.onTouchMove = function (event) {
-          if (event.touches.length === 2) {
-            // ignore pan movement, only allow pinch zoom
-            const t0 = event.touches[0];
-            const t1 = event.touches[1];
-            const dx = t1.x - t0.x;
-            const dy = t1.y - t0.y;
-            this._lastPinchDist = Math.hypot(dx, dy);
-          }
-        };
+      // constantly reset pivot & position to base
+      const ctrl = cam.script?.cameraControls;
+      if (ctrl) {
+        ctrl.focusPoint.copy(basePivot);
+        cam.setLocalPosition(basePos);
       }
     });
   });
