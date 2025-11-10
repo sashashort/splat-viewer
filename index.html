@@ -20,9 +20,8 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- lighter = smoother -->
     <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
-      <!-- Assets (load your splat from THIS repo) -->
+      <!-- Assets -->
       <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
       <pc-asset id="cameraControls"
         src="https://cdn.jsdelivr.net/npm/playcanvas@latest/scripts/esm/camera-controls.mjs"></pc-asset>
@@ -51,5 +50,23 @@
       </pc-scene>
     </pc-app>
   </div>
+
+  <!-- Disable two-finger panning on mobile -->
+  <script type="module">
+    import * as pc from "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs";
+
+    window.addEventListener("pcstart", e => {
+      const app = e.detail.app;
+
+      // Only apply on touch devices
+      if ('ontouchstart' in window) {
+        app.touch.on(pc.EVENT_TOUCHMOVE, evt => {
+          if (evt.touches.length === 2) {
+            evt.event.preventDefault(); // block drag/pan
+          }
+        });
+      }
+    });
+  </script>
 </body>
 </html>
