@@ -20,12 +20,9 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- lighter = smoother -->
     <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
-      <!-- Assets (load your splat from THIS repo) -->
+      <!-- Assets -->
       <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
-      <pc-asset id="cameraControls"
-        src="https://cdn.jsdelivr.net/npm/playcanvas@latest/scripts/esm/camera-controls.mjs"></pc-asset>
 
       <!-- Scene -->
       <pc-scene>
@@ -33,13 +30,13 @@
           <pc-entity id="camera" position="0 0 2.3">
             <pc-camera clear-color="#0b0b0b" fov="40"></pc-camera>
             <pc-scripts>
-              <pc-script name="cameraControls" attributes='{
-                "enableFly": false,
-                "enablePan": false,
+              <pc-script name="orbitNoPan" attributes='{
                 "focusPoint": "vec3:0,0,0",
                 "pitchRange": "vec2:-80,-10",
-                "sceneSize": 3,
-                "zoomRange": "vec2:1.6,3.2"
+                "zoomRange":  "vec2:1.6,3.2",
+                "rotateSpeed": 0.25,
+                "touchRotateSpeed": 0.2,
+                "zoomSpeed": 0.003
               }'></pc-script>
             </pc-scripts>
           </pc-entity>
@@ -51,5 +48,121 @@
       </pc-scene>
     </pc-app>
   </div>
+
+  <!-- Minimal rotate + zoom controls (no panning, on all devices) -->
+  <script type="module">
+    import * as pc from "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs";
+
+    class OrbitNoPan extends pc.ScriptType {
+      initialize() {
+        const a = this.app, c = this.entity;
+        // attrs
+        this.focusPoint = this.focusPoint || new pc.Vec3(0,0,0);
+        const pitchMin = this.pitchRange?.x ?? -80, pitchMax = this.pitchRange?.y ?? -10;
+        const distMin  = this.zoomRange?.x ?? 1.6,  distMax  = this.zoomRange?.y ?? 3.2;
+        const rotSpeed = this.rotateSpeed ?? 0.25;
+        const touchRot = this.touchRotateSpeed ?? 0.2;
+        const zoomSpd  = this.zoomSpeed ?? 0.003;
+
+        // spherical state
+        const v = c.getLocalPosition().clone();
+        let dist = pc.Vec3.distance(v, this.focusPoint);
+        let yaw  = 16 * pc.math.DEG_TO_RAD;       // start similar to your rig
+        let pitch= -28 * pc.math.DEG_TO_RAD;
+
+        const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+        const apply = () => {
+          const cp = this.focusPoint;
+          const x = cp.x + dist * Math.cos(pitch) * Math.sin(yaw);
+          const y = cp.y + dist * Math.sin(pitch);
+          const z = cp.z + dist * Math.cos(pitch) * Math.cos(yaw);
+          c.setLocalPosition(x, y, z);
+          c.lookAt(cp);
+        };
+        apply();
+
+        // MOUSE: left-drag rotate, wheel zoom (no middle/right pan)
+        this._onMouseDown = (e) => { if (e.button === 0) { this._dragging = true; this._lx=e.x; this._ly=e.y; } };
+        this._onMouseUp   = () => { this._dragging = false; };
+        this._onMouseMove = (e) => {
+          if (!this._dragging) return;
+          yaw   -= (e.dx * rotSpeed) * 0.01;
+          pitch -= (e.dy * rotSpeed) * 0.01;
+          pitch = clamp(pitch, pitchMin*pc.math.DEG_TO_RAD, pitchMax*pc.math.DEG_TO_RAD);
+          apply();
+        };
+        this._onWheel = (e) => {
+          dist += e.deltaY * zoomSpd * dist;
+          dist = clamp(dist, distMin, distMax);
+          apply();
+        };
+
+        a.mouse?.on(pc.EVENT_MOUSEDOWN, this._onMouseDown, this);
+        a.mouse?.on(pc.EVENT_MOUSEUP,   this._onMouseUp,   this);
+        a.mouse?.on(pc.EVENT_MOUSEMOVE, this._onMouseMove, this);
+        a.mouse?.on(pc.EVENT_MOUSEWHEEL,this._onWheel,     this);
+
+        // TOUCH: one-finger rotate, two-finger pinch zoom; NO PAN
+        this._touchState = { rotating:false, lastX:0, lastY:0, lastPinch:null };
+
+        this._onTouchStart = (e) => {
+          if (e.touches.length === 1) {
+            const t=e.touches[0]; this._touchState.rotating=true; this._touchState.lastX=t.x; this._touchState.lastY=t.y;
+          } else if (e.touches.length === 2) {
+            const [t0,t1]=e.touches;
+            this._touchState.lastPinch = Math.hypot(t1.x-t0.x, t1.y-t0.y);
+          }
+          e.event.preventDefault();
+        };
+
+        this._onTouchMove = (e) => {
+          if (e.touches.length === 1 && this._touchState.rotating) {
+            const t=e.touches[0];
+            const dx=t.x-this._touchState.lastX, dy=t.y-this._touchState.lastY;
+            this._touchState.lastX=t.x; this._touchState.lastY=t.y;
+            yaw   -= dx * touchRot * 0.01;
+            pitch -= dy * touchRot * 0.01;
+            pitch = clamp(pitch, pitchMin*pc.math.DEG_TO_RAD, pitchMax*pc.math.DEG_TO_RAD);
+            apply();
+          } else if (e.touches.length === 2) {
+            const [t0,t1]=e.touches;
+            const d = Math.hypot(t1.x-t0.x, t1.y-t0.y);
+            if (this._touchState.lastPinch != null) {
+              const delta = d - this._touchState.lastPinch;
+              dist -= (delta * zoomSpd * 0.05) * dist; // zoom in/out
+              dist = clamp(dist, distMin, distMax);
+              apply();
+            }
+            this._touchState.lastPinch = d;
+          }
+          e.event.preventDefault(); // crucial: block any default/pan
+        };
+
+        this._onTouchEnd = (e) => {
+          this._touchState.rotating=false;
+          this._touchState.lastPinch=null;
+          e.event.preventDefault();
+        };
+
+        a.touch?.on(pc.EVENT_TOUCHSTART, this._onTouchStart, this);
+        a.touch?.on(pc.EVENT_TOUCHMOVE,  this._onTouchMove,  this);
+        a.touch?.on(pc.EVENT_TOUCHEND,   this._onTouchEnd,   this);
+        a.touch?.on(pc.EVENT_TOUCHCANCEL,this._onTouchEnd,   this);
+      }
+
+      // attributes
+      static attributes = {
+        focusPoint: { type: 'vec3' },
+        pitchRange: { type: 'vec2' },
+        zoomRange:  { type: 'vec2' },
+        rotateSpeed:{ type: 'number' },
+        touchRotateSpeed:{ type: 'number' },
+        zoomSpeed:  { type: 'number' }
+      };
+    }
+
+    pc.registerScript(OrbitNoPan, 'orbitNoPan');
+  </script>
 </body>
 </html>
