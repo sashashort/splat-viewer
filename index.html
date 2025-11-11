@@ -5,131 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Splat Plate — Viewer</title>
 
-  <!-- PlayCanvas import map -->
   <script type="importmap">
   { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs" } }
   </script>
-
-  <!-- Register our no-pan controls BEFORE pc-app starts -->
-  <script type="module">
-    import * as pc from "playcanvas";
-
-    class OrbitNoPan extends pc.ScriptType {
-      initialize() {
-        const a = this.app, c = this.entity;
-
-        // attrs
-        this.focusPoint = this.focusPoint || new pc.Vec3(0,0,0);
-        const pitchMin = this.pitchRange?.x ?? -80, pitchMax = this.pitchRange?.y ?? -10;
-        const distMin  = this.zoomRange?.x ?? 1.6,  distMax  = this.zoomRange?.y ?? 3.2;
-        const rotSpeed = this.rotateSpeed ?? 0.25;
-        const touchRot = this.touchRotateSpeed ?? 0.2;
-        const zoomSpd  = this.zoomSpeed ?? 0.003;
-
-        // spherical state
-        let dist = pc.Vec3.distance(c.getLocalPosition(), this.focusPoint);
-        let yaw   = 16 * pc.math.DEG_TO_RAD;
-        let pitch = -28 * pc.math.DEG_TO_RAD;
-
-        const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
-        const apply = () => {
-          const cp = this.focusPoint;
-          const x = cp.x + dist * Math.cos(pitch) * Math.sin(yaw);
-          const y = cp.y + dist * Math.sin(pitch);
-          const z = cp.z + dist * Math.cos(pitch) * Math.cos(yaw);
-          c.setLocalPosition(x, y, z);
-          c.lookAt(cp);
-        };
-        apply();
-
-        // MOUSE: left-drag rotate, wheel zoom
-        this._drag = false;
-        a.mouse?.on(pc.EVENT_MOUSEDOWN, e => { if (e.button===0) this._drag=true; }, this);
-        a.mouse?.on(pc.EVENT_MOUSEUP,   () => { this._drag=false; }, this);
-        a.mouse?.on(pc.EVENT_MOUSEMOVE, e => {
-          if (!this._drag) return;
-          yaw   -= (e.dx * rotSpeed) * 0.01;
-          pitch -= (e.dy * rotSpeed) * 0.01;
-          pitch  = clamp(pitch, pitchMin*pc.math.DEG_TO_RAD, pitchMax*pc.math.DEG_TO_RAD);
-          apply();
-        }, this);
-        a.mouse?.on(pc.EVENT_MOUSEWHEEL, e => {
-          dist += e.deltaY * zoomSpd * dist;
-          dist  = clamp(dist, distMin, distMax);
-          apply();
-        }, this);
-
-        // TOUCH: one-finger rotate, two-finger pinch zoom; NO PAN
-        this._touch = { rotating:false, lastX:0, lastY:0, lastPinch:null };
-
-        a.touch?.on(pc.EVENT_TOUCHSTART, e => {
-          if (e.touches.length === 1) {
-            const t=e.touches[0]; this._touch.rotating=true; this._touch.lastX=t.x; this._touch.lastY=t.y;
-          } else if (e.touches.length === 2) {
-            const [t0,t1]=e.touches; this._touch.lastPinch = Math.hypot(t1.x-t0.x, t1.y-t0.y);
-          }
-          e.event?.preventDefault();
-        }, this);
-
-        a.touch?.on(pc.EVENT_TOUCHMOVE, e => {
-          if (e.touches.length === 1 && this._touch.rotating) {
-            const t=e.touches[0];
-            const dx=t.x-this._touch.lastX, dy=t.y-this._touch.lastY;
-            this._touch.lastX=t.x; this._touch.lastY=t.y;
-            yaw   -= dx * touchRot * 0.01;
-            pitch -= dy * touchRot * 0.01;
-            pitch  = clamp(pitch, pitchMin*pc.math.DEG_TO_RAD, pitchMax*pc.math.DEG_TO_RAD);
-            apply();
-          } else if (e.touches.length === 2) {
-            const [t0,t1]=e.touches;
-            const d = Math.hypot(t1.x-t0.x, t1.y-t0.y);
-            if (this._touch.lastPinch != null) {
-              const delta = d - this._touch.lastPinch;
-              dist -= (delta * zoomSpd * 0.05) * dist; // zoom
-              dist  = clamp(dist, distMin, distMax);
-              apply();
-            }
-            this._touch.lastPinch = d;
-          }
-          e.event?.preventDefault();
-        }, this);
-
-        a.touch?.on(pc.EVENT_TOUCHEND, () => {
-          this._touch.rotating=false; this._touch.lastPinch=null;
-        }, this);
-        a.touch?.on(pc.EVENT_TOUCHCANCEL, () => {
-          this._touch.rotating=false; this._touch.lastPinch=null;
-        }, this);
-      }
-
-      static attributes = {
-        focusPoint: { type: 'vec3' },
-        pitchRange: { type: 'vec2' },
-        zoomRange:  { type: 'vec2' },
-        rotateSpeed:{ type: 'number' },
-        touchRotateSpeed:{ type: 'number' },
-        zoomSpeed:  { type: 'number' }
-      };
-    }
-
-    pc.registerScript(OrbitNoPan, 'orbitNoPan');
-  </script>
-
-  <!-- PlayCanvas web components -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components@latest/dist/pwc.mjs"></script>
 
   <style>
     html, body { margin:0; height:100%; overflow:hidden; background:#0b0b0b; }
     * { box-sizing: border-box; }
     .wrap { position:fixed; inset:0; }
-    pc-app { position:absolute; inset:0; display:block; user-select:none; /* keep receiving touches */ }
+    pc-app { position:absolute; inset:0; display:block; user-select:none; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
+      <!-- Assets -->
       <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
+      <pc-asset id="noPan" src="./orbit-no-pan.mjs"></pc-asset> <!-- NEW -->
 
+      <!-- Scene -->
       <pc-scene>
         <pc-entity id="camRig" position="0 0 0" rotation="-28 16 0">
           <pc-entity id="camera" position="0 0 2.3">
@@ -138,8 +33,10 @@
               <pc-script name="orbitNoPan" attributes='{
                 "focusPoint": "vec3:0,0,0",
                 "pitchRange": "vec2:-80,-10",
-                "sceneSize": 3,
-                "zoomRange": "vec2:1.6,3.2"
+                "zoomRange":  "vec2:1.6,3.2",
+                "rotateSpeed": 0.25,
+                "touchRotateSpeed": 0.2,
+                "zoomSpeed": 0.003
               }'></pc-script>
             </pc-scripts>
           </pc-entity>
