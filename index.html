@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>Splat Plate — Viewer (with autorotation)</title>
+  <title>Splat Plate — Viewer (Autorotate)</title>
 
-  <!-- PlayCanvas ESM (same as your working base) -->
+  <!-- PlayCanvas ESM -->
   <script type="importmap">
   {
     "imports": {
@@ -13,7 +13,7 @@
     }
   }
   </script>
-  <!-- Official Web Components (same build family) -->
+  <!-- Web Components -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components@latest/dist/pwc.mjs"></script>
 
   <style>
@@ -25,7 +25,6 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- Keep the same flags you had -->
     <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
       <!-- Assets -->
       <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
@@ -34,6 +33,7 @@
 
       <!-- Scene -->
       <pc-scene>
+        <!-- Camera Rig (we will autorotate THIS) -->
         <pc-entity id="camRig" position="0 0 0" rotation="-28 16 0">
           <pc-entity id="camera" position="0 0 2.3">
             <pc-camera clear-color="#0b0b0b" fov="40"></pc-camera>
@@ -48,39 +48,36 @@
               }'></pc-script>
             </pc-scripts>
           </pc-entity>
-        </pc-entity>
 
-        <!-- Your splat -->
-        <pc-entity id="splat" position="0 0 0" rotation="180 0 0" scale="2.8 2.8 2.8">
-          <pc-splat asset="plate"></pc-splat>
-
-          <!-- Attach autorotate HERE -->
+          <!-- Attach autorotate to the RIG for visible motion -->
           <pc-scripts>
             <pc-script name="autoRotate" attributes='{ "speed": 10 }'></pc-script>
           </pc-scripts>
+        </pc-entity>
+
+        <!-- Plate -->
+        <pc-entity id="splat" position="0 0 0" rotation="180 0 0" scale="2.8 2.8 2.8">
+          <pc-splat asset="plate"></pc-splat>
         </pc-entity>
       </pc-scene>
     </pc-app>
   </div>
 
-  <!-- Register the autorotate script using the ESM API -->
+  <!-- Register autorotate (ESM API) -->
   <script type="module">
     import { script } from "playcanvas";
 
     class AutoRotate extends script.Type {
       initialize() {
-        // attribute injected from <pc-script attributes='{ "speed": 10 }'>
-        if (this.speed == null) this.speed = 10; // deg/sec default
+        // Speed in degrees per second (from attributes or default)
+        if (this.speed == null) this.speed = 10;
       }
       update(dt) {
-        // rotate model around local Y
-        const e = this.entity.getLocalEulerAngles();
-        e.y += this.speed * dt;
-        this.entity.setLocalEulerAngles(e);
+        // Spin around local Y so the view orbits smoothly
+        this.entity.rotateLocal(0, this.speed * dt, 0);
       }
     }
 
-    // Proper registration for the module build
     script.create("autoRotate", AutoRotate, {
       attributes: {
         speed: { type: "number", default: 10 }
