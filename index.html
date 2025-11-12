@@ -62,23 +62,26 @@
 
   <!-- Autorotate script -->
   <script type="module">
-    import { ScriptType } from "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs";
+    const appEl = document.querySelector('pc-app');
 
-    class AutoRotate extends ScriptType {
-      initialize() {
-        this.speed = this.speed ?? 10; // degrees per second
-      }
+    const SPEED_DEG_PER_SEC = 10;
 
-      update(dt) {
-        const euler = this.entity.getLocalEulerAngles();
-        euler.y += this.speed * dt;
-        this.entity.setLocalEulerAngles(euler);
-      }
+    function start() {
+      const app = appEl.app;
+      if (!app) { requestAnimationFrame(start); return; }
+
+      const splat = app.root.findByName('splat');
+      if (!splat) { requestAnimationFrame(start); return; }
+
+      app.on('update', (dt) => {
+        const e = splat.getLocalEulerAngles();
+        e.y += SPEED_DEG_PER_SEC * dt;
+        splat.setLocalEulerAngles(e);
+      });
     }
 
-    // Register the script with PlayCanvas
-    pc.registerScript(AutoRotate, "autoRotate");
-    AutoRotate.attributes.add("speed", { type: "number", default: 10 });
+    if (appEl.app) start();
+    else appEl.addEventListener('initialized', start, { once: true });
   </script>
 </body>
 </html>
