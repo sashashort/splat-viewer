@@ -20,15 +20,15 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- lighter = smoother -->
     <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
-      <!-- Assets (load your splat from THIS repo) -->
+      <!-- Assets -->
       <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
       <pc-asset id="cameraControls"
         src="https://cdn.jsdelivr.net/npm/playcanvas@latest/scripts/esm/camera-controls.mjs"></pc-asset>
 
       <!-- Scene -->
       <pc-scene>
+        <!-- Camera Rig -->
         <pc-entity id="camRig" position="0 0 0" rotation="-28 16 0">
           <pc-entity id="camera" position="0 0 2.3">
             <pc-camera clear-color="#0b0b0b" fov="40"></pc-camera>
@@ -45,11 +45,40 @@
           </pc-entity>
         </pc-entity>
 
+        <!-- Plate -->
         <pc-entity id="splat" position="0 0 0" rotation="180 0 0" scale="2.8 2.8 2.8">
           <pc-splat asset="plate"></pc-splat>
+
+          <!-- Add autorotation -->
+          <pc-scripts>
+            <pc-script name="autoRotate" attributes='{
+              "speed": 10
+            }'></pc-script>
+          </pc-scripts>
         </pc-entity>
       </pc-scene>
     </pc-app>
   </div>
+
+  <!-- Autorotate script -->
+  <script type="module">
+    import { ScriptType } from "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs";
+
+    class AutoRotate extends ScriptType {
+      initialize() {
+        this.speed = this.speed ?? 10; // degrees per second
+      }
+
+      update(dt) {
+        const euler = this.entity.getLocalEulerAngles();
+        euler.y += this.speed * dt;
+        this.entity.setLocalEulerAngles(euler);
+      }
+    }
+
+    // Register the script with PlayCanvas
+    pc.registerScript(AutoRotate, "autoRotate");
+    AutoRotate.attributes.add("speed", { type: "number", default: 10 });
+  </script>
 </body>
 </html>
