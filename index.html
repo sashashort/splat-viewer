@@ -2,36 +2,46 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>Splat Plate — Viewer (bulletproof controls)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Splat Plate — Viewer</title>
 
   <!-- PlayCanvas web components -->
   <script type="importmap">
-    { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs" } }
+  { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs" } }
   </script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components@latest/dist/pwc.mjs"></script>
 
   <style>
-    html, body { margin:0; height:100%; background:#0b0b0b; }
-    /* Prevent scroll/pull-to-refresh and parent-page gestures */
-    html, body, .wrap { overscroll-behavior: none; touch-action: none; }
+    html, body { margin:0; height:100%; overflow:hidden; background:#0b0b0b; }
     * { box-sizing: border-box; }
     .wrap { position:fixed; inset:0; }
-    pc-app { position:absolute; inset:0; display:block; user-select:none; }
-    /* Make sure the actual canvas accepts input */
-    canvas { touch-action: none; pointer-events: auto; display:block; }
+    pc-app { position:absolute; inset:0; display:block; touch-action:none; user-select:none; }
   </style>
 </head>
 <body>
   <div class="wrap">
+    <!-- lighter = smoother -->
     <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
+      <!-- Assets (load your splat from THIS repo) -->
       <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
+      <pc-asset id="cameraControls"
+        src="https://cdn.jsdelivr.net/npm/playcanvas@latest/scripts/esm/camera-controls.mjs"></pc-asset>
 
+      <!-- Scene -->
       <pc-scene>
         <pc-entity id="camRig" position="0 0 0" rotation="-28 16 0">
           <pc-entity id="camera" position="0 0 2.3">
             <pc-camera clear-color="#0b0b0b" fov="40"></pc-camera>
+            <pc-scripts>
+              <pc-script name="cameraControls" attributes='{
+                "enableFly": false,
+                "enablePan": false,
+                "focusPoint": "vec3:0,0,0",
+                "pitchRange": "vec2:-80,-10",
+                "sceneSize": 3,
+                "zoomRange": "vec2:1.6,3.2"
+              }'></pc-script>
+            </pc-scripts>
           </pc-entity>
         </pc-entity>
 
@@ -41,168 +51,5 @@
       </pc-scene>
     </pc-app>
   </div>
-
-  <!-- Robust, canvas-bound, no-pan controller -->
-  <script type="module">
-  const appEl = document.querySelector('pc-app');
-
-  function whenReady(cb) {
-    const tryInit = () => {
-      const app = appEl.app;
-      if (!app || !app.graphicsDevice) return requestAnimationFrame(tryInit);
-      // wait until camRig & camera exist
-      const camRig = app.root.findByName('camRig');
-      const camera = app.root.findByName('camera');
-      if (!camRig || !camera) return requestAnimationFrame(tryInit);
-      cb(app, camRig, camera);
-    };
-    if (appEl.app) tryInit();
-    else appEl.addEventListener('initialized', tryInit, { once: true });
-  }
-
-  whenReady((app, camRig, camera) => {
-    // --- state ---
-    let pitch  = camRig.getLocalEulerAngles().x; // [-80..-10]
-    let yaw    = camRig.getLocalEulerAngles().y;
-    let radius = camera.getLocalPosition().z;    // [1.6..3.2]
-
-    const P_MIN=-80, P_MAX=-10, Z_MIN=1.6, Z_MAX=3.2;
-    const ROT_SENS = 0.15;      // deg per px
-    const PINCH_SENS = 0.003;   // zoom per px change
-    const WHEEL_SENS = 0.0015;  // zoom per wheel delta
-    const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-
-    function applyPose(){
-      camRig.setLocalPosition(0,0,0);                 // no pan ever
-      camRig.setLocalEulerAngles(pitch, yaw, 0);      // rotate only
-      camera.setLocalPosition(0,0,clamp(radius,Z_MIN,Z_MAX)); // zoom only
-    }
-    applyPose();
-
-    // Belt & suspenders: undo any drift each frame
-    app.on('update', () => {
-      const rp = camRig.getLocalPosition(); if (rp.x||rp.y||rp.z) camRig.setLocalPosition(0,0,0);
-      const cp = camera.getLocalPosition(); if (cp.x||cp.y) camera.setLocalPosition(0,0,cp.z);
-    });
-
-    // --- input on the REAL canvas ---
-    const canvas = app.graphicsDevice.canvas;
-    canvas.style.touchAction = 'none';
-    canvas.style.pointerEvents = 'auto';
-
-    const opts = { passive:false, capture:true };
-
-    // Mouse rotation
-    let dragging = false, lastMX = 0, lastMY = 0;
-
-    canvas.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse' && e.button === 0) {
-        dragging = true; lastMX = e.clientX; lastMY = e.clientY;
-        try { canvas.setPointerCapture(e.pointerId); } catch {}
-        e.preventDefault(); e.stopPropagation();
-      }
-    }, opts);
-
-    canvas.addEventListener('pointermove', (e) => {
-      if (e.pointerType === 'mouse' && dragging) {
-        const dx = e.clientX - lastMX;
-        const dy = e.clientY - lastMY;
-        lastMX = e.clientX; lastMY = e.clientY;
-        yaw   += dx * ROT_SENS;
-        pitch  = clamp(pitch + dy * ROT_SENS, P_MIN, P_MAX);
-        applyPose();
-        e.preventDefault(); e.stopPropagation();
-      }
-    }, opts);
-
-    const endMouse = (e)=>{
-      if (e.pointerType === 'mouse') {
-        dragging = false;
-        try { canvas.releasePointerCapture(e.pointerId); } catch {}
-      }
-    };
-    canvas.addEventListener('pointerup', endMouse, opts);
-    canvas.addEventListener('pointercancel', endMouse, opts);
-    canvas.addEventListener('pointerleave', endMouse, opts);
-    canvas.addEventListener('pointerout', endMouse, opts);
-
-    // Touch: track actual previous positions per finger (no movementX)
-    const touches = new Map(); // id -> {x,y,prevX,prevY}
-    let lastPinchDist = null;
-
-    function updateTouch(e){
-      const t = touches.get(e.pointerId);
-      if (!t) return;
-      t.prevX = t.x; t.prevY = t.y;
-      t.x = e.clientX; t.y = e.clientY;
-    }
-
-    function pinchDistance() {
-      const arr = [...touches.values()];
-      return Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
-    }
-
-    canvas.addEventListener('pointerdown', (e) => {
-      if (e.pointerType !== 'touch') return;
-      touches.set(e.pointerId, { x:e.clientX, y:e.clientY, prevX:e.clientX, prevY:e.clientY });
-      try { canvas.setPointerCapture(e.pointerId); } catch {}
-      e.preventDefault(); e.stopPropagation();
-    }, opts);
-
-    canvas.addEventListener('pointermove', (e) => {
-      if (e.pointerType !== 'touch') return;
-      if (!touches.has(e.pointerId)) return;
-      updateTouch(e);
-      const arr = [...touches.values()];
-
-      if (arr.length === 1) {
-        // one-finger rotate using manual deltas
-        const dx = arr[0].x - arr[0].prevX;
-        const dy = arr[0].y - arr[0].prevY;
-        yaw   += dx * ROT_SENS;
-        pitch  = clamp(pitch + dy * ROT_SENS, P_MIN, P_MAX);
-        applyPose();
-        e.preventDefault(); e.stopPropagation();
-        return;
-      }
-
-      if (arr.length === 2) {
-        const d = pinchDistance();
-        if (lastPinchDist == null) lastPinchDist = d;
-        const dz = (lastPinchDist - d) * PINCH_SENS;
-        lastPinchDist = d;
-        radius = clamp(radius + dz, Z_MIN, Z_MAX);
-        applyPose();
-        e.preventDefault(); e.stopPropagation();
-        return;
-      }
-    }, opts);
-
-    const endTouch = (e) => {
-      if (e.pointerType !== 'touch') return;
-      touches.delete(e.pointerId);
-      if (touches.size < 2) lastPinchDist = null;
-      try { canvas.releasePointerCapture(e.pointerId); } catch {}
-      e.preventDefault(); e.stopPropagation();
-    };
-    canvas.addEventListener('pointerup', endTouch, opts);
-    canvas.addEventListener('pointercancel', endTouch, opts);
-    canvas.addEventListener('pointerleave', endTouch, opts);
-    canvas.addEventListener('pointerout', endTouch, opts);
-
-    // Wheel zoom (desktop)
-    canvas.addEventListener('wheel', (e) => {
-      const delta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 120);
-      radius = clamp(radius + delta * WHEEL_SENS, Z_MIN, Z_MAX);
-      applyPose();
-      e.preventDefault(); e.stopPropagation();
-    }, opts);
-
-    // Block iOS/Android native gestures that might steal events
-    canvas.addEventListener('gesturestart', (e)=>{ e.preventDefault(); }, {passive:false});
-    canvas.addEventListener('gesturechange', (e)=>{ e.preventDefault(); }, {passive:false});
-    canvas.addEventListener('gestureend', (e)=>{ e.preventDefault(); }, {passive:false});
-  });
-</script>
 </body>
 </html>
