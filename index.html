@@ -62,26 +62,46 @@
 
   <!-- Autorotate script -->
   <script type="module">
-    const appEl = document.querySelector('pc-app');
+  const appEl = document.querySelector('pc-app');
+  const SPEED_DEG_PER_SEC = 10; // tweak speed
 
-    const SPEED_DEG_PER_SEC = 10;
-
-    function start() {
+  // Wait until PlayCanvas app is fully started
+  function whenStarted(cb) {
+    const tryIt = () => {
       const app = appEl.app;
-      if (!app) { requestAnimationFrame(start); return; }
+      if (!app || !app.graphicsDevice) return requestAnimationFrame(tryIt);
+      if (app._started) cb(app); else app.once('start', () => cb(app));
+    };
+    tryIt();
+  }
 
-      const splat = app.root.findByName('splat');
-      if (!splat) { requestAnimationFrame(start); return; }
-
-      app.on('update', (dt) => {
-        const e = splat.getLocalEulerAngles();
-        e.y += SPEED_DEG_PER_SEC * dt;
-        splat.setLocalEulerAngles(e);
-      });
+  whenStarted((app) => {
+    // Find the entity that has a 'splat' component (created by <pc-splat>)
+    function findSplatEntity() {
+      const q = [app.root];
+      while (q.length) {
+        const e = q.shift();
+        if (e && e.splat) return e;           // <-- component check
+        for (const child of e.children) q.push(child);
+      }
+      return null;
     }
 
-    if (appEl.app) start();
-    else appEl.addEventListener('initialized', start, { once: true });
-  </script>
+    let target = null;
+
+    app.on('update', (dt) => {
+      // Lazy-resolve once the <pc-splat> is actually in the scene
+      if (!target) {
+        target = findSplatEntity();
+        if (!target) return; // not ready yet
+      }
+
+      // Rotate around local Y
+      const e = target.getLocalEulerAngles();
+      e.y += SPEED_DEG_PER_SEC * dt;
+      target.setLocalEulerAngles(e);
+    });
+  });
+</script>
 </body>
 </html>
