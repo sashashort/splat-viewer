@@ -1,5 +1,3 @@
-
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -53,8 +51,123 @@
       </pc-scene>
     </pc-app>
   </div>
+
+  <!-- ADD THIS: place the script right before </body> -->
+  <script type="module">
+    const appEl = document.querySelector('pc-app');
+
+    function init() {
+      const app = appEl.app;
+      if (!app) return false;
+
+      const camRig = app.root.findByName('camRig');
+      const camera = app.root.findByName('camera');
+      if (!camRig || !camera) return false;
+
+      const home = {
+        rigEuler: camRig.getLocalEulerAngles().clone(),
+        camLocal: camera.getLocalPosition().clone()
+      };
+
+      const Z_MIN = 1.6, Z_MAX = 3.2;
+      const active = new Map();
+      let lastPinchDist = null;
+      let snapping = false;
+
+      const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+      const dist2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+      const getTouches = () => [...active.values()];
+
+      function snapHome() {
+        if (snapping) return;
+        snapping = true;
+        const dur = 180;
+        const start = performance.now();
+        const startEuler = camRig.getLocalEulerAngles().clone();
+        const startPos = camera.getLocalPosition().clone();
+
+        const tick = (now) => {
+          const k = clamp((now - start) / dur, 0, 1);
+          const e = 1 - Math.pow(1 - k, 3);
+
+          camRig.setLocalEulerAngles(
+            startEuler.x + (home.rigEuler.x - startEuler.x) * e,
+            startEuler.y + (home.rigEuler.y - startEuler.y) * e,
+            startEuler.z + (home.rigEuler.z - startEuler.z) * e
+          );
+
+          camera.setLocalPosition(startPos.x, startPos.y, startPos.z);
+
+          if (k < 1) requestAnimationFrame(tick);
+          else snapping = false;
+        };
+        requestAnimationFrame(tick);
+      }
+
+      const target = appEl;
+      const opts = { passive: false, capture: true };
+
+      target.addEventListener('pointerdown', (ev) => {
+        if (ev.pointerType !== 'touch') return;
+        active.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      }, opts);
+
+      target.addEventListener('pointermove', (ev) => {
+        if (ev.pointerType !== 'touch') return;
+        if (active.has(ev.pointerId)) {
+          active.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        }
+        const touches = getTouches();
+
+        if (touches.length === 2) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+
+          const d = dist2(touches[0], touches[1]);
+          if (lastPinchDist == null) { lastPinchDist = d; return; }
+
+          const dz = (lastPinchDist - d) * 0.003;
+          lastPinchDist = d;
+
+          const lp = camera.getLocalPosition();
+          const z = clamp(lp.z + dz, Z_MIN, Z_MAX);
+          camera.setLocalPosition(lp.x, lp.y, z);
+
+          camRig.setLocalPosition(0, 0, 0);
+          return;
+        }
+
+        camRig.setLocalPosition(0, 0, 0);
+      }, opts);
+
+      const endLike = (ev) => {
+        if (ev.pointerType !== 'touch') return;
+        active.delete(ev.pointerId);
+        const touches = getTouches();
+        if (touches.length < 2) lastPinchDist = null;
+        if (touches.length === 0) {
+          camRig.setLocalPosition(0, 0, 0);
+          snapHome();
+        }
+      };
+
+      target.addEventListener('pointerup', endLike, opts);
+      target.addEventListener('pointercancel', endLike, opts);
+      target.addEventListener('pointerout', endLike, opts);
+      target.addEventListener('pointerleave', endLike, opts);
+
+      target.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 1) { e.preventDefault(); e.stopImmediatePropagation(); }
+      }, opts);
+
+      return true;
+    }
+
+    // Make sure pc-app is ready
+    const tryInit = () => {
+      if (!init()) requestAnimationFrame(tryInit);
+    };
+    tryInit();
+  </script>
 </body>
 </html>
-
-
-
