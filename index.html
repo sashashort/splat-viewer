@@ -1,86 +1,40 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>Splat Plate — Viewer</title>
-
-  <!-- PlayCanvas web components -->
-  <script type="importmap">
-  { "imports": { "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@latest/build/playcanvas.mjs" } }
-  </script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components@latest/dist/pwc.mjs"></script>
-
-  <style>
-    html, body { margin:0; height:100%; overflow:hidden; background:#0b0b0b; }
-    * { box-sizing: border-box; }
-    .wrap { position:fixed; inset:0; }
-    pc-app { position:absolute; inset:0; display:block; touch-action:none; user-select:none; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlayCanvas .sog Autorotation</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@2/engine/playcanvas.mjs"
+            }
+        }
+    </script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@playcanvas/web-components@latest/dist/web-components.mjs"></script>
 </head>
 <body>
-  <div class="wrap">
-    <!-- lighter = smoother -->
-    <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
-      <!-- Assets (load your splat from THIS repo) -->
-      <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
-      <pc-asset id="cameraControls"
-        src="https://cdn.jsdelivr.net/npm/playcanvas@latest/scripts/esm/camera-controls.mjs"></pc-asset>
-
-      <!-- Scene -->
-      <pc-scene>
-        <pc-entity id="camRig" position="0 0 0" rotation="-28 16 0">
-          <pc-entity id="camera" position="0 0 2.3">
-            <pc-camera clear-color="#0b0b0b" fov="40"></pc-camera>
-            <pc-scripts>
-              <pc-script name="cameraControls" attributes='{
-                "enableFly": false,
-                "enablePan": false,
-                "focusPoint": "vec3:0,0,0",
-                "pitchRange": "vec2:-80,-10",
-                "sceneSize": 3,
-                "zoomRange": "vec2:1.6,3.2"
-              }'></pc-script>
-            </pc-scripts>
-          </pc-entity>
-        </pc-entity>
-
-        <pc-entity id="splat" position="0 0 0" rotation="180 0 0" scale="2.8 2.8 2.8">
-          <pc-splat asset="plate"></pc-splat>
-
-          <!-- Attach autorotation to the PLATE entity -->
-          <pc-scripts>
-            <pc-script name="autoRotate" attributes='{
-              "speed": 10
-            }'></pc-script>
-          </pc-scripts>
-        </pc-entity>
-      </pc-scene>
+    <pc-app antialias="false" high-resolution="false">
+        <!-- Load camera controls script -->
+        <pc-asset src="https://cdn.jsdelivr.net/npm/playcanvas/scripts/esm/camera-controls.mjs"></pc-asset>
+        
+        <!-- Load your .sog file (replace with your asset URL or local path) -->
+        <pc-asset id="sogAsset" src="https://developer.playcanvas.com/assets/toy-cat.sog"></pc-asset>
+        
+        <pc-scene>
+            <!-- Camera entity with controls -->
+            <pc-entity position="0 0 2.5">
+                <pc-camera></pc-camera>
+                <pc-scripts>
+                    <pc-script name="cameraControls"></pc-script>
+                </pc-scripts>
+            </pc-entity>
+            
+            <!-- .sog entity (will be rotated via script) -->
+            <pc-entity id="sogEntity" position="0 -0.7 0" rotation="0 0 180">
+                <pc-splat asset="sogAsset"></pc-splat>
+            </pc-entity>
+        </pc-scene>
     </pc-app>
-  </div>
-
-  <!-- Correct ESM script registration for PlayCanvas -->
-  <script type="module">
-    import { script } from "playcanvas";
-
-    class AutoRotate extends script.Type {
-      initialize() {
-        // speed is injected from the <pc-script> attributes
-        if (this.speed == null) this.speed = 10; // deg/sec default
-      }
-      update(dt) {
-        const euler = this.entity.getLocalEulerAngles();
-        euler.y += this.speed * dt;
-        this.entity.setLocalEulerAngles(euler);
-      }
-    }
-
-    // Register script (ESM way)
-    script.create('autoRotate', AutoRotate, {
-      attributes: {
-        speed: { type: 'number', default: 10 }
-      }
-    });
-  </script>
 </body>
 </html>
