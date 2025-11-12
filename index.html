@@ -20,16 +20,16 @@
 </head>
 <body>
   <div class="wrap">
+    <!-- lighter = smoother -->
     <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
-      <!-- Assets -->
+      <!-- Assets (load your splat from THIS repo) -->
       <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
       <pc-asset id="cameraControls"
         src="https://cdn.jsdelivr.net/npm/playcanvas@latest/scripts/esm/camera-controls.mjs"></pc-asset>
 
       <!-- Scene -->
       <pc-scene>
-        <!-- Camera Rig (give it a NAME) -->
-        <pc-entity id="camRig" name="camRig" position="0 0 0" rotation="-28 16 0">
+        <pc-entity id="camRig" position="0 0 0" rotation="-28 16 0">
           <pc-entity id="camera" position="0 0 2.3">
             <pc-camera clear-color="#0b0b0b" fov="40"></pc-camera>
             <pc-scripts>
@@ -45,32 +45,42 @@
           </pc-entity>
         </pc-entity>
 
-        <!-- Plate (name is optional, but we add it) -->
-        <pc-entity id="splat" name="splat" position="0 0 0" rotation="180 0 0" scale="2.8 2.8 2.8">
+        <pc-entity id="splat" position="0 0 0" rotation="180 0 0" scale="2.8 2.8 2.8">
           <pc-splat asset="plate"></pc-splat>
+
+          <!-- Attach autorotation to the PLATE entity -->
+          <pc-scripts>
+            <pc-script name="autoRotate" attributes='{
+              "speed": 10
+            }'></pc-script>
+          </pc-scripts>
         </pc-entity>
       </pc-scene>
     </pc-app>
   </div>
 
-  <!-- Autorotate the CAMERA RIG (super reliable) -->
+  <!-- Correct ESM script registration for PlayCanvas -->
   <script type="module">
-    const SPEED_DEG_PER_SEC = 10; // adjust spin speed
-    const appEl = document.querySelector('pc-app');
+    import { script } from "playcanvas";
 
-    function start() {
-      const app = appEl.app;
-      if (!app) return requestAnimationFrame(start);
-
-      const rig = app.root.findByName('camRig');
-      if (!rig) return requestAnimationFrame(start);
-
-      app.on('update', (dt) => {
-        // rotate rig around its local Y (smooth, no pan)
-        rig.rotateLocal(0, SPEED_DEG_PER_SEC * dt, 0);
-      });
+    class AutoRotate extends script.Type {
+      initialize() {
+        // speed is injected from the <pc-script> attributes
+        if (this.speed == null) this.speed = 10; // deg/sec default
+      }
+      update(dt) {
+        const euler = this.entity.getLocalEulerAngles();
+        euler.y += this.speed * dt;
+        this.entity.setLocalEulerAngles(euler);
+      }
     }
-    if (appEl.app) start(); else appEl.addEventListener('initialized', start, { once: true });
+
+    // Register script (ESM way)
+    script.create('autoRotate', AutoRotate, {
+      attributes: {
+        speed: { type: 'number', default: 10 }
+      }
+    });
   </script>
 </body>
 </html>
