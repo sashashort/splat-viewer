@@ -28,8 +28,8 @@
 
       <!-- Scene -->
       <pc-scene>
-        <!-- Camera Rig -->
-        <pc-entity id="camRig" position="0 0 0" rotation="-28 16 0">
+        <!-- Camera Rig (give it a NAME) -->
+        <pc-entity id="camRig" name="camRig" position="0 0 0" rotation="-28 16 0">
           <pc-entity id="camera" position="0 0 2.3">
             <pc-camera clear-color="#0b0b0b" fov="40"></pc-camera>
             <pc-scripts>
@@ -45,63 +45,32 @@
           </pc-entity>
         </pc-entity>
 
-        <!-- Plate -->
-        <pc-entity id="splat" position="0 0 0" rotation="180 0 0" scale="2.8 2.8 2.8">
+        <!-- Plate (name is optional, but we add it) -->
+        <pc-entity id="splat" name="splat" position="0 0 0" rotation="180 0 0" scale="2.8 2.8 2.8">
           <pc-splat asset="plate"></pc-splat>
-
-          <!-- Add autorotation -->
-          <pc-scripts>
-            <pc-script name="autoRotate" attributes='{
-              "speed": 10
-            }'></pc-script>
-          </pc-scripts>
         </pc-entity>
       </pc-scene>
     </pc-app>
   </div>
 
-  <!-- Autorotate script -->
+  <!-- Autorotate the CAMERA RIG (super reliable) -->
   <script type="module">
-  const appEl = document.querySelector('pc-app');
-  const SPEED_DEG_PER_SEC = 10; // tweak speed
+    const SPEED_DEG_PER_SEC = 10; // adjust spin speed
+    const appEl = document.querySelector('pc-app');
 
-  // Wait until PlayCanvas app is fully started
-  function whenStarted(cb) {
-    const tryIt = () => {
+    function start() {
       const app = appEl.app;
-      if (!app || !app.graphicsDevice) return requestAnimationFrame(tryIt);
-      if (app._started) cb(app); else app.once('start', () => cb(app));
-    };
-    tryIt();
-  }
+      if (!app) return requestAnimationFrame(start);
 
-  whenStarted((app) => {
-    // Find the entity that has a 'splat' component (created by <pc-splat>)
-    function findSplatEntity() {
-      const q = [app.root];
-      while (q.length) {
-        const e = q.shift();
-        if (e && e.splat) return e;           // <-- component check
-        for (const child of e.children) q.push(child);
-      }
-      return null;
+      const rig = app.root.findByName('camRig');
+      if (!rig) return requestAnimationFrame(start);
+
+      app.on('update', (dt) => {
+        // rotate rig around its local Y (smooth, no pan)
+        rig.rotateLocal(0, SPEED_DEG_PER_SEC * dt, 0);
+      });
     }
-
-    let target = null;
-
-    app.on('update', (dt) => {
-      // Lazy-resolve once the <pc-splat> is actually in the scene
-      if (!target) {
-        target = findSplatEntity();
-        if (!target) return; // not ready yet
-      }
-
-      // Rotate around local Y
-      const e = target.getLocalEulerAngles();
-      e.y += SPEED_DEG_PER_SEC * dt;
-      target.setLocalEulerAngles(e);
-    });
-  });
-</script>
+    if (appEl.app) start(); else appEl.addEventListener('initialized', start, { once: true });
+  </script>
 </body>
 </html>
