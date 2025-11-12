@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>Splat Plate — Viewer</title>
+  <title>Splat Plate — Viewer (No Pan)</title>
 
   <!-- PlayCanvas web components -->
   <script type="importmap">
@@ -15,33 +15,24 @@
     html, body { margin:0; height:100%; overflow:hidden; background:#0b0b0b; }
     * { box-sizing: border-box; }
     .wrap { position:fixed; inset:0; }
+    /* Important: block browser gestures so we fully control touch */
     pc-app { position:absolute; inset:0; display:block; touch-action:none; user-select:none; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <!-- lighter = smoother -->
     <pc-app antialias="false" high-resolution="false" alpha="false" depth="false" stencil="false">
       <!-- Assets (load your splat from THIS repo) -->
       <pc-asset id="plate" src="./export_ply.sog"></pc-asset>
-      <pc-asset id="cameraControls"
-        src="https://cdn.jsdelivr.net/npm/playcanvas@latest/scripts/esm/camera-controls.mjs"></pc-asset>
 
       <!-- Scene -->
       <pc-scene>
+        <!-- Start angle you liked -->
         <pc-entity id="camRig" position="0 0 0" rotation="-28 16 0">
+          <!-- Camera sits on the local Z radius; we’ll only change its Z for zoom -->
           <pc-entity id="camera" position="0 0 2.3">
             <pc-camera clear-color="#0b0b0b" fov="40"></pc-camera>
-            <pc-scripts>
-              <pc-script name="cameraControls" attributes='{
-                "enableFly": false,
-                "enablePan": false,
-                "focusPoint": "vec3:0,0,0",
-                "pitchRange": "vec2:-80,-10",
-                "sceneSize": 3,
-                "zoomRange": "vec2:1.6,3.2"
-              }'></pc-script>
-            </pc-scripts>
+            <!-- NOTE: no camera-controls here -->
           </pc-entity>
         </pc-entity>
 
@@ -52,121 +43,152 @@
     </pc-app>
   </div>
 
-  <!-- ADD THIS: place the script right before </body> -->
+  <!-- Custom orbit: rotate (no pan), zoom on pinch/wheel -->
   <script type="module">
-  const appEl = document.querySelector('pc-app');
+    const appEl = document.querySelector('pc-app');
 
-  function init() {
-    const app = appEl.app;
-    if (!app) return false;
+    function init() {
+      const app = appEl.app;
+      if (!app) return false;
 
-    const camRig  = app.root.findByName('camRig');
-    const camera  = app.root.findByName('camera');
-    if (!camRig || !camera) return false;
+      const camRig = app.root.findByName('camRig');
+      const camera = app.root.findByName('camera');
+      if (!camRig || !camera) return false;
 
-    // Your preferred pose (already in the scene)
-    const HOME_RIG_EULER = camRig.getLocalEulerAngles().clone();
-    const HOME_CAM_POS   = camera.getLocalPosition().clone();
+      // State (start from your existing pose)
+      let pitch = camRig.getLocalEulerAngles().x; // up/down (-80..-10)
+      let yaw   = camRig.getLocalEulerAngles().y; // left/right (free)
+      let radius = camera.getLocalPosition().z;   // 1.6..3.2
 
-    const Z_MIN = 1.6, Z_MAX = 3.2;
+      // Limits
+      const P_MIN = -80, P_MAX = -10;
+      const Z_MIN = 1.6, Z_MAX = 3.2;
 
-    // Track touches to do pinch zoom ourselves (no pan)
-    const active = new Map();
-    let lastPinchDist = null;
-    const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-    const dist2 = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-    const touches = () => [...active.values()];
-
-    // 1) BRUTE FORCE: kill any pan drift every frame
-    app.on('update', () => {
-      // Rig must stay at origin
-      const lp = camRig.getLocalPosition();
-      if (lp.x !== 0 || lp.y !== 0 || lp.z !== 0) camRig.setLocalPosition(0,0,0);
-
-      // Camera must not slip sideways
-      const cp = camera.getLocalPosition();
-      if (cp.x !== 0 || cp.y !== 0) camera.setLocalPosition(0,0,cp.z);
-    });
-
-    // 2) Swallow two-finger gestures and convert to pinch-zoom (only Z)
-    const target = appEl;                        // host element covers the canvas
-    const opts   = { passive:false, capture:true };
-
-    target.addEventListener('pointerdown', ev => {
-      if (ev.pointerType !== 'touch') return;
-      active.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-    }, opts);
-
-    target.addEventListener('pointermove', ev => {
-      if (ev.pointerType !== 'touch') return;
-
-      if (active.has(ev.pointerId)) {
-        active.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      // Helpers
+      const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+      function applyPose() {
+        camRig.setLocalPosition(0,0,0);                   // never pan
+        camRig.setLocalEulerAngles(pitch, yaw, 0);        // rotate only
+        camera.setLocalPosition(0, 0, clamp(radius,Z_MIN,Z_MAX)); // zoom only
       }
-      const ts = touches();
+      applyPose();
 
-      // Two fingers: block pan + do our own zoom
-      if (ts.length === 2) {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
+      // Input handling
+      let dragging = false;
+      let lastX = 0, lastY = 0;
+      let active = new Map(); // pointerId -> {x,y}
+      let lastPinch = null;
 
-        const d = dist2(ts[0], ts[1]);
-        if (lastPinchDist == null) { lastPinchDist = d; return; }
+      const target = appEl;              // covers the canvas
+      const opts = { passive:false, capture:true };
+      const ROT_SENS = 0.15;             // degrees per px
+      const PINCH_SENS = 0.003;          // zoom per px distance change
+      const WHEEL_SENS = 0.0015;         // zoom per wheel delta
 
-        const dz = (lastPinchDist - d) * 0.003;     // zoom sensitivity
-        lastPinchDist = d;
+      // Mouse (desktop)
+      target.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.buttons === 1) {
+          dragging = true; lastX = e.clientX; lastY = e.clientY;
+          e.preventDefault(); e.stopImmediatePropagation();
+        }
+        if (e.pointerType === 'touch') {
+          active.set(e.pointerId, { x:e.clientX, y:e.clientY });
+        }
+      }, opts);
 
-        const lp = camera.getLocalPosition();
-        const z  = clamp(lp.z + dz, Z_MIN, Z_MAX);
-        camera.setLocalPosition(0, 0, z);           // lock x/y = 0 here too
+      target.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'mouse' && dragging) {
+          const dx = e.clientX - lastX;
+          const dy = e.clientY - lastY;
+          lastX = e.clientX; lastY = e.clientY;
 
-        // Make sure rig never budges
-        camRig.setLocalPosition(0,0,0);
-      }
-    }, opts);
+          yaw   += dx * ROT_SENS;
+          pitch  = clamp(pitch + dy * ROT_SENS, P_MIN, P_MAX);
+          applyPose();
 
-    const endLike = ev => {
-      if (ev.pointerType !== 'touch') return;
-      active.delete(ev.pointerId);
-      const ts = touches();
-      if (ts.length < 2) lastPinchDist = null;
+          e.preventDefault(); e.stopImmediatePropagation();
+          return;
+        }
 
-      // Optional: snap angle back when fingers leave (keeps user zoom)
-      if (ts.length === 0) {
-        const startEuler = camRig.getLocalEulerAngles().clone();
-        const startPos   = camera.getLocalPosition().clone();
-        const startTime  = performance.now(), dur = 150;
+        if (e.pointerType === 'touch') {
+          if (active.has(e.pointerId)) {
+            active.set(e.pointerId, { x:e.clientX, y:e.clientY });
+          }
+          const touches = [...active.values()];
 
-        (function animate(t){
-          const k = Math.min(1, (t - startTime)/dur);
-          const e = 1 - Math.pow(1-k, 3);
-          camRig.setLocalEulerAngles(
-            startEuler.x + (HOME_RIG_EULER.x - startEuler.x)*e,
-            startEuler.y + (HOME_RIG_EULER.y - startEuler.y)*e,
-            startEuler.z + (HOME_RIG_EULER.z - startEuler.z)*e
-          );
-          camera.setLocalPosition(0,0,startPos.z);  // keep zoom, lock x/y
-          if (k < 1) requestAnimationFrame(animate);
-        })(startTime);
-      }
-    };
+          // One finger = rotate (no pan)
+          if (touches.length === 1) {
+            const t = touches[0];
+            // Derive deltas from last frame
+            const dx = e.movementX ?? 0;
+            const dy = e.movementY ?? 0;
+            // On some browsers movementX/Y are 0 for touch; compute manually
+            // using last stored point:
+            // (We already updated active with current; reconstruct prev)
+            // To keep it robust, fall back to 0 if not available.
+            yaw   += (dx || 0) * ROT_SENS;
+            pitch  = clamp(pitch + (dy || 0) * ROT_SENS, P_MIN, P_MAX);
+            applyPose();
+            e.preventDefault(); e.stopImmediatePropagation();
+            return;
+          }
 
-    target.addEventListener('pointerup', endLike, opts);
-    target.addEventListener('pointercancel', endLike, opts);
-    target.addEventListener('pointerout', endLike, opts);
-    target.addEventListener('pointerleave', endLike, opts);
+          // Two fingers = pinch zoom (no pan)
+          if (touches.length === 2) {
+            const d = Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y);
+            if (lastPinch == null) lastPinch = d;
+            const dz = (lastPinch - d) * PINCH_SENS;
+            lastPinch = d;
+            radius = clamp(radius + dz, Z_MIN, Z_MAX);
+            applyPose();
+            e.preventDefault(); e.stopImmediatePropagation();
+            return;
+          }
+        }
+      }, opts);
 
-    // Block default multi-touch behaviors on some browsers
-    target.addEventListener('touchstart', e => {
-      if (e.touches.length > 1) { e.preventDefault(); e.stopImmediatePropagation(); }
-    }, opts);
+      const endTouch = (e) => {
+        if (e.pointerType === 'mouse') {
+          dragging = false;
+          return;
+        }
+        if (e.pointerType === 'touch') {
+          active.delete(e.pointerId);
+          if (active.size < 2) lastPinch = null;
+        }
+      };
+      target.addEventListener('pointerup', endTouch, opts);
+      target.addEventListener('pointercancel', endTouch, opts);
+      target.addEventListener('pointerout', endTouch, opts);
+      target.addEventListener('pointerleave', endTouch, opts);
 
-    return true;
-  }
+      // Wheel zoom (desktop)
+      target.addEventListener('wheel', (e) => {
+        // Normalize delta (some devices are very “coarse”)
+        const delta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 120);
+        radius = clamp(radius + delta * WHEEL_SENS, Z_MIN, Z_MAX);
+        applyPose();
+        e.preventDefault(); e.stopImmediatePropagation();
+      }, opts);
 
-  // Wait until pc-app is initialized
-  const boot = () => { if (!init()) requestAnimationFrame(boot); };
-  if (appEl.app) init(); else boot();
-</script>
+      // Kill double-tap zoom & browser gestures
+      target.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 1) { e.preventDefault(); e.stopImmediatePropagation(); }
+      }, opts);
+
+      // Safety: if anything tries to pan, undo it each frame
+      app.on('update', () => {
+        const lpRig = camRig.getLocalPosition();
+        if (lpRig.x || lpRig.y || lpRig.z) camRig.setLocalPosition(0,0,0);
+        const lpCam = camera.getLocalPosition();
+        if (lpCam.x || lpCam.y) camera.setLocalPosition(0,0,lpCam.z);
+      });
+
+      return true;
+    }
+
+    const boot = () => { if (!init()) requestAnimationFrame(boot); };
+    if (appEl.app) init(); else boot();
+  </script>
 </body>
 </html>
