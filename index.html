@@ -32,7 +32,10 @@
             
             <!-- .sog entity (will be rotated via script) -->
             <pc-entity id="sogEntity" position="0 -0.7 0" rotation="0 0 180">
-                <pc-splat asset="sogAsset"></pc-splat>
+                <pc-splat asset="sogAsset"></pc-splat
+                 <pc-scripts>
+                  <pc-script src="autorotate.js" data="{ rotationSpeed: 30 }"></pc-script>
+              </pc-scripts>                              
             </pc-entity>
         </pc-scene>
     </pc-app>
